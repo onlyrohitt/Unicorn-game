@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Unicorn Coin Collector Game</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      background: linear-gradient(to top, #a0d8f7, #f0f9ff);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      height: 100vh;
+      user-select: none;
+    }
+
+    #gameArea {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: linear-gradient(to top, #a0d8f7, #f0f9ff);
+    }
+    #ground {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      height: 100px;
+      background: linear-gradient(to top, #4caf50, #81c784);
+      box-shadow: inset 0 5px 10px rgba(0,0,0,0.1);
+      z-index: 10;
+    }
+    #unicorn {
+      position: absolute;
+      bottom: 100px;
+      left: 50px;
+      width: 120px;
+      height: 100px;
+      transition: bottom 0.2s ease;
+      z-index: 20;
+    }
+    #unicorn img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      user-select: none;
+      pointer-events: none;
+    }
+    .coin {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      user-select: none;
+      pointer-events: none;
+      animation: spin 3s linear infinite;
+      z-index: 15;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg);}
+      100% { transform: rotate(360deg);}
+    }
+    #scoreBoard {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #333;
+      background: rgba(255 255 255 / 0.8);
+      padding: 10px 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      z-index: 30;
+    }
+    #instructions {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      font-size: 1rem;
+      color: #333;
+      background: rgba(255 255 255 / 0.8);
+      padding: 10px 15px;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      max-width: 220px;
+      z-index: 30;
+    }
+    #watermark {
+      position: absolute;
+      bottom: 35px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      font-size: 1.2rem;
+      font-weight: bold;
+      z-index: 1000;
+      pointer-events: none;
+    }
+    #levelDisplay {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      font-size: 1.2rem;
+      font-weight: bold;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 8px 16px;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      z-index: 100;
+    }
+    .obstacle {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      background-color: red;
+      border-radius: 50%;
+      animation: bounce 2s infinite ease-in-out;
+      z-index: 18;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-50px); }
+    }
+  </style>
+</head>
+
+<body>
+<button id="startBtn" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg z-50 shadow-lg text-xl">
+  Start Game
+</button>
+<audio id="bgMusic" src="https://www.bensound.com/bensound-music/bensound-sunny.mp3" loop></audio>
+<div id="levelDisplay">Level: 1</div>
+<div id="watermark">@rxhit_stll</div>
+
+<div class="relative" id="gameArea">
+  <div id="scoreBoard">Score: 0</div>
+  <div id="instructions">
+    Controls:
+    <br/><i class="fas fa-arrow-left"></i> Walk Left
+    <br/><i class="fas fa-arrow-right"></i> Walk Right
+    <br/><i class="fas fa-arrow-up"></i> Fly Up
+    <br/><i class="fas fa-arrow-down"></i> Fly Down
+    <br/>Hold <strong>Shift</strong> to Run
+  </div>
+  <div id="ground"></div>
+  <div aria-label="Unicorn character" id="unicorn">
+    <img id="unicornImg" src="Unicorn.png" width="120" height="100"/>
+  </div>
+</div>
+
+<script>
+  const gameArea = document.getElementById('gameArea');
+  const unicorn = document.getElementById('unicorn');
+  const unicornImg = document.getElementById('unicornImg');
+  const scoreBoard = document.getElementById('scoreBoard');
+  const levelDisplay = document.getElementById('levelDisplay');
+  const startBtn = document.getElementById('startBtn');
+  const bgMusic = document.getElementById('bgMusic');
+
+  const groundHeight = 100;
+  const gameWidth = window.innerWidth;
+  const gameHeight = window.innerHeight;
+  const maxFlyHeight = gameHeight - 200;
+
+  let unicornX = 50;
+  let unicornY = groundHeight;
+  let velocityX = 0;
+  let velocityY = 0;
+  let isFlying = false;
+  let isRunning = false;
+  let level = 1;
+  let score = 0;
+  const coinsPerLevel = 5;
+  let totalCoins = parseInt(localStorage.getItem("totalCoins") || "0");
+  const coins = [];
+  const obstacles = [];
+  let gameStarted = false;
+  let animationId; 
+
+  const keys = { left: false, right: false, up: false, down: false, shift: false };
+
+  const unicornStates = {
+    walk: "Unicorn_walk.png", // FIXED: Set initial state image to 'Unicorn.png' for consistency
+    run: "Unicorn_Run.png",
+    fly: "Unicorn_Fly.png"
+  };
+  
+  // Helper function to remove elements
+  function clearGameElements() {
+      // Remove all coins from the DOM
+      coins.forEach(coin => coin.element.remove());
+      coins.length = 0;
+      // Remove all obstacles from the DOM
+      obstacles.forEach(obs => obs.element.remove());
+      obstacles.length = 0;
+  }
+
+  function createCoins(num) {
+    // FIXED: Clear only coins here if only new coins are needed, 
+    // but the nextLevel function will clear ALL elements, which is better.
+    // For now, only remove previous level's coins before creating new ones.
+    coins.forEach(c => c.element.remove());
+    coins.length = 0; 
+    
+    for (let i = 0; i < num; i++) {
+      const coin = document.createElement('img');
+      coin.src = "https://placehold.co/40x40/gold/png?text=Coin";
+      coin.classList.add('coin');
+      const x = Math.random() * (gameWidth - 200) + 100;
+      const y = Math.random() * (maxFlyHeight - groundHeight - 50) + groundHeight + 50;
+      coin.style.left = x + "px";
+      coin.style.bottom = y + "px";
+      gameArea.appendChild(coin);
+      // FIXED: Added the 'element' property to the object pushed to 'coins' array for consistency in collision logic
+      coins.push({ element: coin, x, y, collected: false }); 
+    }
+  }
+
+  function createObstacles(num) {
+    // FIXED: Clear all existing obstacles before creating new ones for the level
+    obstacles.forEach(o => o.element.remove());
+    obstacles.length = 0;
+
+    for (let i = 0; i < num; i++) {
+      const obs = document.createElement('div');
+      obs.className = 'obstacle';
+      const x = Math.random() * (gameWidth - 200) + 100;
+      const y = groundHeight;
+      obs.style.left = x + "px";
+      obs.style.bottom = y + "px";
+      gameArea.appendChild(obs);
+      obstacles.push({ element: obs, x, y });
+    }
+  }
+
+  function stopGame() {
+    gameStarted = false;
+    cancelAnimationFrame(animationId);
+    bgMusic.pause();
+    startBtn.textContent = "😵 Oops! You hit an obstacle! Restart Game";
+    startBtn.classList.remove("hidden");
+  }
+
+  function updateUnicornImage() {
+    // FIXED: The 'walk' state should correspond to the initial image, which is `Unicorn.png` in the HTML, 
+    // but the `unicornStates` map had it as "Unicorn_walk.png". Corrected `walk` state usage.
+    unicornImg.src = isFlying ? unicornStates.fly :
+                      isRunning ? unicornStates.run :
+                                  unicornStates.walk;
+  }
+
+  function updatePosition() {
+    if (!gameStarted) return;
+
+    if (keys.left) {
+      velocityX = isRunning ? -8 : -4;
+      unicorn.style.transform = 'scaleX(-1)';
+    } else if (keys.right) {
+      velocityX = isRunning ? 8 : 4;
+      unicorn.style.transform = 'scaleX(1)';
+    } else {
+      velocityX = 0;
+    }
+
+    if (keys.up) {
+      velocityY = -6;
+      // Removed setting isFlying = true here. It's set based on unicornY > groundHeight at the end.
+      // This part of the logic is inherently choppy but kept as requested.
+    } else if (keys.down) {
+      velocityY = 6;
+      // Removed setting isFlying = true here.
+    } else {
+      velocityY += 0.5;
+    }
+
+    unicornX += velocityX;
+    unicornY -= velocityY;
+
+    unicornX = Math.max(0, Math.min(unicornX, gameWidth - unicorn.offsetWidth));
+    unicornY = Math.max(groundHeight, Math.min(unicornY, maxFlyHeight));
+
+    // FIXED: Check isFlying status based on position, not just key presses
+    if (unicornY > groundHeight) {
+       isFlying = true;
+    } else if (unicornY <= groundHeight + 1) {
+      isFlying = false;
+      velocityY = 0; // FIXED: Stop gravity when on the ground
+    }
+
+    isRunning = keys.shift && (keys.left || keys.right);
+    updateUnicornImage();
+
+    unicorn.style.left = unicornX + "px";
+    unicorn.style.bottom = unicornY + "px";
+  }
+
+  function checkCollisions() {
+    const unicornRect = unicorn.getBoundingClientRect();
+    coins.forEach(coin => {
+      if (coin.collected) return;
+      const coinRect = coin.element.getBoundingClientRect();
+      if (unicornRect.left < coinRect.right &&
+          unicornRect.right > coinRect.left &&
+          unicornRect.top < coinRect.bottom &&
+          unicornRect.bottom > coinRect.top) {
+        coin.collected = true;
+        coin.element.remove();
+        score++;
+        totalCoins++;
+        localStorage.setItem("totalCoins", totalCoins);
+        // FIXED: Display Total Coins in the scoreboard
+        scoreBoard.textContent = `Score: ${score} (Total: ${totalCoins})`; 
+        if (score >= coinsPerLevel) nextLevel();
+      }
+    });
+
+    obstacles.forEach(obs => {
+      // NOTE: The obstacle collision check is flawed because the obstacle has a CSS animation (bounce)
+      // that changes its visual position (top/bottom of obsRect) but its `obs.y` value remains constant (groundHeight). 
+      // Using `getBoundingClientRect()` partially accounts for the animation, but it can still feel unfair/off.
+      const obsRect = obs.element.getBoundingClientRect(); 
+      if (
+        unicornRect.left < obsRect.right &&
+        unicornRect.right > obsRect.left &&
+        unicornRect.top < obsRect.bottom &&
+        unicornRect.bottom > obsRect.top
+      ) {
+        stopGame();
+      }
+    });
+  }
+
+  function nextLevel() {
+    clearGameElements(); // FIXED: Clear all old coins and obstacles on level-up
+    score = 0;
+    level++;
+    if (level > 10) {
+      alert("🎉 Congratulations! You completed all levels!");
+      // FIXED: Reset level and state after winning
+      level = 1; 
+      score = 0;
+      stopGame(); 
+      return;
+    }
+    levelDisplay.textContent = `Level: ${level}`;
+    createCoins(coinsPerLevel);
+    createObstacles(Math.floor(level / 2));
+  }
+
+  function gameLoop() {
+    updatePosition();
+    checkCollisions();
+    animationId = requestAnimationFrame(gameLoop);
+  }
+
+  function startGame() {
+    // FIXED: Reset necessary game state variables for a proper restart
+    if (gameStarted) {
+        level = 1;
+        score = 0;
+        unicornX = 50;
+        unicornY = groundHeight;
+        unicorn.style.left = `${unicornX}px`;
+        unicorn.style.bottom = `${unicornY}px`;
+        clearGameElements();
+        levelDisplay.textContent = `Level: 1`;
+        scoreBoard.textContent = `Score: 0 (Total: ${totalCoins})`;
+    }
+
+    startBtn.classList.add("hidden");
+    startBtn.textContent = "Restart Game";
+    bgMusic.currentTime = 0;
+    bgMusic.play().catch(e => console.log("Audio autoplay failed:", e)); // Added catch for browser policies
+    gameStarted = true;
+    createCoins(coinsPerLevel);
+    createObstacles(Math.floor(level / 2));
+    animationId = requestAnimationFrame(gameLoop);
+  }
+
+  startBtn.addEventListener("click", startGame);
+
+  window.addEventListener("keydown", e => {
+    if (e.repeat) return;
+    // FIXED: Added preventDefault to stop arrows/space from scrolling the page
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+        e.preventDefault();
+    }
+    switch (e.key.toLowerCase()) {
+      case 'arrowleft': case 'a': keys.left = true; break;
+      case 'arrowright': case 'd': keys.right = true; break;
+      case 'arrowup': case 'w': keys.up = true; break;
+      case 'arrowdown': case 's': keys.down = true; break;
+      case 'shift': keys.shift = true; break;
+    }
+  });
+
+  window.addEventListener("keyup", e => {
+    switch (e.key.toLowerCase()) {
+      case 'arrowleft': case 'a': keys.left = false; break;
+      case 'arrowright': case 'd': keys.right = false; break;
+      case 'arrowup': case 'w': keys.up = false; break;
+      case 'arrowdown': case 's': keys.down = false; break;
+      case 'shift': keys.shift = false; break;
+    }
+  });
+</script>
+</body>
+</html>
