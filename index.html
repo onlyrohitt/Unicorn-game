@@ -182,12 +182,11 @@
 
   const keys = { left: false, right: false, up: false, down: false, shift: false };
 
-  const unicornStates = {
-    walk: "Unicorn_walk.png", // FIXED: Set initial state image to 'Unicorn.png' for consistency
-    run: "Unicorn_Run.png",
-    fly: "Unicorn_Fly.png"
-  };
-  
+const unicornStates = {
+    walk: "./Unicorn_walk.png",
+    run: "./Unicorn_Run.png",
+    fly: "./Unicorn_Fly.png"
+};
   // Helper function to remove elements
   function clearGameElements() {
       // Remove all coins from the DOM
